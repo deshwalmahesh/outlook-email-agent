@@ -68,8 +68,7 @@ async def process_email_notification(payload: dict, graph_client, USER_ID: str) 
                 conversation_messages = graph_client.get_conversation_messages(
                     identifier=conversation_id,
                     identifier_type="conversation_id", 
-                    user_id=USER_ID,
-                    order="receivedDateTime asc"
+                    user_id=USER_ID
                 )
                 
                 if conversation_messages and len(conversation_messages) > 1:

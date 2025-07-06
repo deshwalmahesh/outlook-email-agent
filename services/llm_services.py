@@ -236,11 +236,11 @@ def create_conversation_summary(conversation_messages: List[dict]) -> Optional[s
         previous_messages = conversation_messages[1:]
         
         # Build conversation string from previous emails
-        conversation_text = "# Previous Conversation\n\n"
+        conversation_text = "# Previous Conversations\n\n"
         
         for i, message in enumerate(previous_messages, 1):
             subject = message.get('subject', 'No Subject')
-            body_content = message.get('body', {})
+            body_content = message.get('body', {}) # "body" in graph response is a dict 
             
             # Extract and clean body content
             if isinstance(body_content, dict):
