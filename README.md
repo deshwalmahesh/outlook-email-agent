@@ -13,6 +13,47 @@ This application automates email handling by:
 6. Proofreading and redrafting responses if needed
 7. Saving approved drafts to Outlook
 
+
+```mermaid
+graph TD
+    A[New Email Arrives] --> B[Microsoft Graph Webhook]
+    B --> C[FastAPI Notification Endpoint]
+    C --> D[Background Task Processing]
+    
+    D --> E[Fetch Email Details]
+    E --> F[Clean HTML Content]
+    F --> G[LLM Email Classification]
+    
+    G --> H{Actionable Email?}
+    H -->|SKIP| I[Log & Ignore]
+    H -->|RESPOND| J[Fetch Conversation History]
+    
+    J --> K{Previous Conversations?}
+    K -->|No| L[Generate Draft Reply]
+    K -->|Yes| M[Summarize Conversation Thread]
+    M --> L
+    
+    L --> N[LLM Proofreading]
+    N --> O{Draft Quality Check}
+    O -->|Rejected| P{Max Attempts Reached?}
+    P -->|No| Q[Redraft with Feedback]
+    Q --> N
+    P -->|Yes| R[Log Failure]
+    O -->|Approved| S[Save Draft to Outlook]
+    
+    S --> T[Process Complete]
+    I --> T
+    R --> U[Process Complete - Failed]
+    
+    style A fill:#e1f5fe
+    style G fill:#f3e5f5
+    style L fill:#f3e5f5
+    style N fill:#f3e5f5
+    style S fill:#e8f5e8
+    style T fill:#e8f5e8
+    style U fill:#ffebee
+```
+
 ## Features
 
 - **Real-time Email Processing**: Webhook-based email notifications via Microsoft Graph API
