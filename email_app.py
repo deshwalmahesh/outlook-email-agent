@@ -1,14 +1,3 @@
-"""
-Microsoft Graph Email Processing Application
-
-This application:
-1. Subscribes to Microsoft Graph API for email notifications
-2. Listens for incoming emails
-3. Processes received emails by extracting content and removing HTML formatting
-4. Uses LLM to classify emails as actionable or non-actionable
-5. For actionable emails, automatically generates draft replies via Graph API
-"""
-
 import os
 from datetime import datetime
 from fastapi import FastAPI, Request, Response, HTTPException, BackgroundTasks, status
@@ -100,6 +89,7 @@ async def process_graph_notifications(request: Request, background_tasks: Backgr
             logger.error(f"Failed to parse JSON payload: {str(e)}")
             return Response(status_code=400, content="Invalid JSON payload")
     
+        # TODO: this cn cause issue if somethibg breaks or one requests takes huge time. Better approach is to use SQS, Celery or similar
         background_tasks.add_task(process_email_notification, payload, graph_client, USER_ID)
         return Response(status_code=202, content="Notification received")
         
@@ -113,7 +103,7 @@ async def list_subscriptions() -> dict:
     List all Graph API subscriptions
     """
     try:
-        subscriptions = graph_client.list_all_subscriptions()
+        subscriptions = await graph_client.list_all_subscriptions()
         return {"subscriptions": subscriptions}
     except Exception as e:
         logger.error(f"Error listing subscriptions: {str(e)}")
@@ -139,7 +129,7 @@ async def delete_subscription(request: SubscriptionDeleteRequest) -> dict:
     Delete an existing MS Graph subscription
     """
     try:
-        result = graph_client.delete_subscription(
+        result = await graph_client.delete_subscription(
             subscription_id=request.subscription_id
         )
         

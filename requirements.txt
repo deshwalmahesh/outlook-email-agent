@@ -1,0 +1,10 @@
+aiofiles
+fastapi
+uvicorn
+python-dotenv
+requests
+aiohttp
+msal
+beautifulsoup4
+langchain-google-genai
+pydantic

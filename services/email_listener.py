@@ -31,7 +31,7 @@ async def fetch_email_details(message_id: str, graph_client, USER_ID: str) -> Op
             "?$select=id,subject,body,conversationId,internetMessageId,"
             "receivedDateTime,sender,toRecipients,parentFolderId"
         )
-        email = graph_client._make_request("GET", endpoint)
+        email = await graph_client._make_request("GET", endpoint)
         
         if not email:
             logger.error(f"No email data received for message {message_id}")
@@ -87,7 +87,7 @@ async def save_draft_to_outlook(message_id: str, draft_content: str, original_em
     try:
         logger.info("Starting save_draft_to_outlook")
         
-        draft_response = graph_client.create_draft_reply(
+        draft_response = await graph_client.create_draft_reply(
             message_id=message_id,
             user_id=USER_ID,
             reply_content=draft_content
@@ -164,7 +164,7 @@ async def process_email_notification(payload: dict, graph_client, USER_ID: str) 
             conversation_id = email_data.get('conversation_id')
             if conversation_id:
                 logger.info(f"Fetching conversation messages for conversation {conversation_id}")
-                conversation_messages = graph_client.get_conversation_messages(
+                conversation_messages = await graph_client.get_conversation_messages(
                     identifier=conversation_id,
                     identifier_type="conversation_id", 
                     user_id=USER_ID
