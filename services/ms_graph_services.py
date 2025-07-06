@@ -234,15 +234,15 @@ class MSGraphClient:
         endpoint = f"/{user_id}"
         return self._make_request('GET', endpoint)
     
-    def get_message(self, identifier: str, user_id: str, identifier_type: Literal["message_id", "internet_message_id"] = "message_id", 
-                  select: Optional[str] = None) -> Optional[dict]:
+    def get_message(self, identifier: str, identifier_type: Literal["message_id", "internet_message_id"], 
+                  user_id: str, select: Optional[str] = None) -> Optional[dict]:
         """
         Retrieve a single message by either Graph ID or RFC-2822 Message-ID.
         
         Args:
             identifier (str): The ID value to look up.
-            user_id (str): User ID or 'me' for the current user.
             identifier_type (Literal["message_id", "internet_message_id"]): Type of ID to use.
+            user_id (str): User ID or 'me' for the current user.
             select (Optional[str]): Comma-separated fields to include in the response.
             
         Returns:
@@ -271,16 +271,16 @@ class MSGraphClient:
             raise
 
     
-    def get_conversation_messages(self, identifier: str, user_id: str, identifier_type: Literal["conversation_id", "message_id", "internet_message_id"] = "conversation_id",
-                                select: Optional[str] = None, 
+    def get_conversation_messages(self, identifier: str, identifier_type: Literal["conversation_id", "message_id", "internet_message_id"],
+                                 user_id: str, select: Optional[str] = None, 
                                 order: str = None, top: Optional[int] = None) -> List[dict]:
         """
         Retrieve the full thread for a given message.
         
         Args:
             identifier (str): ID value of any message in the thread.
-            user_id (str): User ID or 'me' for the current user.
             identifier_type (Literal): Type of ID to use.
+            user_id (str): User ID or 'me' for the current user.
             select (Optional[str]): Comma-separated fields to include in the response.
             order (str): OrderBy expression for sorting results.
             top (Optional[int]): Maximum number of messages to return.
@@ -293,7 +293,7 @@ class MSGraphClient:
             
         try:
             if identifier_type != "conversation_id":
-                seed = self.get_message(identifier, user_id, identifier_type=identifier_type, select="conversationId")
+                seed = self.get_message(identifier, identifier_type, user_id, select="conversationId")
                 if not seed:
                     return []
                 identifier = seed["conversationId"]

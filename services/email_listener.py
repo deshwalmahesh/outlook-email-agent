@@ -1,5 +1,5 @@
 from typing import Optional
-from services.llm_services import can_respond_to_email, can_send_reply, create_email_draft_reply
+from services.llm_services import can_respond_to_email, can_send_reply, create_email_draft_reply, create_conversation_summary
 from utils import clean_html, logging
 
 logger = logging.getLogger(__name__)
@@ -58,14 +58,42 @@ async def process_email_notification(payload: dict, graph_client, USER_ID: str) 
             logger.info(f"Skipping email {message_id}")
             return
             
-        draft_content = await create_email_draft_reply(clean_subject, clean_body, sender)
+        # Fetch conversation messages for context
+        conversation_messages = []
+        conversation_summary = None
+        try:
+            conversation_id = email_data.get('conversation_id')
+            if conversation_id:
+                logger.info(f"Fetching conversation messages for conversation {conversation_id}")
+                conversation_messages = graph_client.get_conversation_messages(
+                    identifier=conversation_id,
+                    identifier_type="conversation_id", 
+                    user_id=USER_ID,
+                    order="receivedDateTime asc"
+                )
+                
+                if conversation_messages and len(conversation_messages) > 1:
+                    logger.info(f"Found {len(conversation_messages)} messages in conversation")
+                    conversation_summary = create_conversation_summary(conversation_messages)
+                    if conversation_summary:
+                        logger.info("Generated conversation summary")
+                    else:
+                        logger.info("No conversation summary generated")
+                else:
+                    logger.info("No previous conversation messages found")
+                    
+        except Exception as e:
+            logger.error(f"Error fetching conversation context: {str(e)}")
+            # Continue without conversation context
+            
+        draft_content = await create_email_draft_reply(clean_subject, clean_body, sender, conversation_summary)
         if not draft_content:
             logger.error(f"Failed to create draft for email {message_id}")
             return
             
         logger.info("Draft content created")
             
-        is_sendable = can_send_reply(clean_subject, clean_body, draft_content)
+        is_sendable = can_send_reply(clean_subject, clean_body, draft_content, conversation_summary)
         logger.info(f"Draft quality check: {'SENDABLE' if is_sendable else 'SKIP'}")
         
         if not is_sendable:
