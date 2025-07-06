@@ -7,8 +7,12 @@ from utils import get_llm, logging, ClassificationEmail, ClassificationResponse,
 
 logger = logging.getLogger(__name__)
 
+# Maximum number of redraft (if rejected) attempts (1 original + 1 redraft = 2 total tries)
+MAX_REDRAFT_TRIES = 1
+
 try:
     llm = get_llm()
+    faster_llm = get_llm(model_name="gemini-2.5-flash") # classifiction etc doesn't need the heavy model. Faster + Cheaper
 except Exception as e:
     logger.error(f"Failed to initialize LLM: {str(e)}")
     raise
@@ -59,7 +63,7 @@ def can_respond_to_email(subject: str, body: str) -> bool:
             {"role": "user", "content": user_prompt}
         ]
         
-        result = llm.with_structured_output(ClassificationEmail).invoke(messages).classification
+        result = faster_llm.with_structured_output(ClassificationEmail).invoke(messages).classification
         return result == "RESPOND"
         
     except Exception as e:
@@ -121,15 +125,16 @@ def can_send_reply(email_subject: str, email_body: str, draft_response: str, pre
             {"role": "user", "content": user_prompt}
         ]
         
-        result = llm.with_structured_output(ClassificationResponse).invoke(messages).classification
-        return result == "SENDABLE"
+        result = faster_llm.with_structured_output(ClassificationResponse).invoke(messages)
+        return result.classification == "SENDABLE", result.reason
         
     except Exception as e:
         logger.error(f"Error in reply validation: {str(e)}")
         return False
 
 
-async def create_email_draft_reply(subject: str, body: str, sender: str, prev_summary: Optional[str] = None) -> Optional[str]:
+async def create_email_draft_reply(subject: str, body: str, sender: str, prev_summary: Optional[str] = None, 
+                                  previous_draft: Optional[str] = None, previous_draft_rejection_reason: Optional[str] = None) -> Optional[str]:
     """
     Create a draft reply for an email using LLM.
     
@@ -138,6 +143,8 @@ async def create_email_draft_reply(subject: str, body: str, sender: str, prev_su
         body: Email body (already cleaned of HTML)  
         sender: Email sender address
         prev_summary: Optional summary of previous conversation context
+        previous_draft: Optional previous draft that was rejected
+        previous_draft_rejection_reason: Optional reason why previous draft was rejected
         
     Returns:
         Optional[str]: Draft reply content or None if creation fails
@@ -150,9 +157,24 @@ async def create_email_draft_reply(subject: str, body: str, sender: str, prev_su
         return None
         
     try:
-        system_prompt = """You are an intelligent email assistant tasked with drafting professional email responses. 
+        # Check if this is a redraft attempt
+        is_redraft = previous_draft is not None and previous_draft_rejection_reason is not None
+        
+        # Dynamic system prompt based on whether it's a redraft or original
+        task_description = "improving a draft email response that was previously rejected" if is_redraft else "drafting professional email responses"
+        task_instruction = "Your task is to create an IMPROVED version of the email response based on the rejection feedback provided." if is_redraft else "Your goal is to create a response that effectively addresses the sender's needs while being professional and efficient."
+        redraft_specific_guidelines = """- Carefully review the rejection reason and address those specific issues
+        - Focus on fixing the issues mentioned in the rejection reason while maintaining the overall quality
+        
+        This is a REDRAFT attempt - create a NEW response that addresses the rejection feedback, do not just modify the previous draft.
+        """ if is_redraft else ""
+        
+        system_prompt = f"""You are an intelligent email assistant tasked with {task_description}.
+        
+        {task_instruction}
         
         Guidelines for your response:
+        {redraft_specific_guidelines}
         - Maintain a professional, courteous, and helpful tone throughout
         - Address all key points and questions from the original email
         - Be concise and to the point while being thorough
@@ -163,9 +185,7 @@ async def create_email_draft_reply(subject: str, body: str, sender: str, prev_su
         - Provide specific information when possible rather than vague statements
         - If you cannot answer a specific question, acknowledge it and suggest a follow-up
         - Avoid unnecessary pleasantries or filler content
-        - If previous conversation context is provided, use it to create more informed and contextually appropriate responses
-        
-        Your goal is to create a response that effectively addresses the sender's needs while being professional and efficient."""
+        - If previous conversation context is provided, use it to create more informed and contextually appropriate responses"""
         
         # Build user prompt with conversation context if available
         user_prompt = f"""
@@ -186,8 +206,20 @@ async def create_email_draft_reply(subject: str, body: str, sender: str, prev_su
         # Previous Conversation Context:
         {prev_summary}
         """
-            
-        user_prompt += "\n\nPlease generate a professional reply to this email, taking into account any previous conversation context provided."
+        
+        # Add redraft information if this is a redraft attempt
+        if is_redraft:
+            user_prompt += f"""
+        
+        # Previous Draft (REJECTED):
+        {previous_draft}
+        
+        # Rejection Reason:
+        {previous_draft_rejection_reason}
+        """
+            user_prompt += "\n\nPlease generate an IMPROVED professional reply that addresses the rejection feedback while taking into account the original email and any previous conversation context provided."
+        else:
+            user_prompt += "\n\nPlease generate a professional reply to this email, taking into account any previous conversation context provided."
         
         messages = [
             {"role": "system", "content": system_prompt},
@@ -205,7 +237,10 @@ async def create_email_draft_reply(subject: str, body: str, sender: str, prev_su
             logger.warning(f"Empty draft content generated for email from {sender}")
             return None
             
-        logger.info(f"Generated draft reply for email from {sender}")
+        if is_redraft:
+            logger.info(f"Generated redraft reply for email from {sender}")
+        else:
+            logger.info(f"Generated draft reply for email from {sender}")
         return draft_content.strip()
         
     except Exception as e:
@@ -213,6 +248,7 @@ async def create_email_draft_reply(subject: str, body: str, sender: str, prev_su
         raise
 
 
+# TODO: Save this conversation in the DB to fetch instead of creating it everytime. Consume Less tokens and time
 def create_conversation_summary(conversation_messages: List[dict]) -> Optional[str]:
     """
     Create a summary of the email conversation using LLM.

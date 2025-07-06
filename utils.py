@@ -28,9 +28,11 @@ def setup_logging():
 # Initialize logging once
 setup_logging()
 
-def get_llm():
+def get_llm(model_name = "gemini-2.5-pro"):
     """
     Initialize and return LLM instance
+    Args:
+        model_name: Optional; specific model name to use, defaults to gemini-2.5-pro
     
     Returns:
         ChatGoogleGenerativeAI: Initialized LLM instance
@@ -41,13 +43,10 @@ def get_llm():
     logger = logging.getLogger(__name__)
     
     try:
-        model_name = os.environ.get("GEMINI_MODEL_NAME")
         api_key = os.environ.get("GOOGLE_AI_STUDIO_API_KEY")
         
         if not api_key:
             raise ValueError("GOOGLE_AI_STUDIO_API_KEY key missing")
-        if not model_name:
-            raise ValueError("GEMINI_MODEL_NAME key missing")
         
         llm = ChatGoogleGenerativeAI(model=model_name, api_key=api_key)
         return llm
@@ -107,6 +106,8 @@ class ClassificationResponse(BaseModel):
     classification: Literal["SENDABLE", "SKIP"] = Field(
         description="Whether email draft we created is SENDABLE to user or should be skipped. Email is SENDABLE if it is according to the user criteria, tone and answers the incoming email"
     )
+    reason: str = Field(
+        description="Reason why the email draft is SENDABLE or SKIP. for the SKIP there must e a detailed reason")
 
 class FirstRunRequest(BaseModel):
     email_data: EmailData
